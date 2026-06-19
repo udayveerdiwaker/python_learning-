@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Developer API Playground - Photo Feed</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0b0713;
+      --panel-bg: rgba(23, 17, 36, 0.45);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text-color: #f3f1f6;
+      --text-muted: #9f97ad;
+      --accent: #a855f7;
+      --accent-hover: #c084fc;
+      --success: #10b981;
+      --error: #ef4444;
+      --input-bg: rgba(255, 255, 255, 0.03);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-color);
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(168, 85, 247, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(96, 165, 250, 0.1) 0%, transparent 45%);
+      background-attachment: fixed;
+      color: var(--text-color);
+      line-height: 1.5;
+      padding: 2rem 1.5rem;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #fff 0%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    /* Glass Panels */
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+      margin-bottom: 1.5rem;
+    }
+
+    /* Token Config Bar */
+    .token-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .token-input-group {
+      display: flex;
+      flex: 1;
+      min-width: 300px;
+      gap: 0.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 0.5rem;
+      padding: 0.65rem 0.85rem;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.2);
+    }
+
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 0.5rem;
+      padding: 0.65rem 1.25rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--glass-border);
+      color: var(--text-color);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Main Grid */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Post form */
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    /* Feed section */
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .feed-header h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .feed-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+
+    /* Post Cards */
+    .post-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 0.5rem;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .post-cover {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .post-body {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .post-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .post-desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      flex: 1;
+      line-height: 1.5;
+    }
+
+    .screenshot-gallery {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 1rem;
+      overflow-x: auto;
+    }
+
+    .screenshot-gallery img {
+      width: 50px;
+      height: 35px;
+      object-fit: cover;
+      border-radius: 0.2rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: zoom-in;
+    }
+
+    .post-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      padding-top: 0.65rem;
+    }
+
+    .category-badge {
+      background: rgba(168, 85, 247, 0.15);
+      color: var(--accent-hover);
+      padding: 0.15rem 0.5rem;
+      border-radius: 0.25rem;
+      font-weight: 600;
+      font-size: 0.7rem;
+    }
+
+    .likes-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      color: #ef4444;
+    }
+
+    /* Toast Alert */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #1c1527;
+      border: 1px solid var(--accent);
+      padding: 0.85rem 1.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      display: none;
+      animation: fadeInUp 0.3s ease-out;
+    }
+
+    @keyframes fadeInUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .status-msg {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <header>
+      <h1>Developer API Playground</h1>
+      <p>Standalone demonstration website reading and writing data to your FastAPI Backend server</p>
+    </header>
+
+    <!-- Token Configuration Bar -->
+    <div class="glass-panel token-bar">
+      <div style="flex: 1; margin-right: 1rem;">
+        <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem;">Security Token Configuration</h3>
+        <p style="font-size: 0.75rem; color: var(--text-muted);">Set your Bearer token here to authenticate your POST submissions.</p>
+      </div>
+      <div class="token-input-group">
+        <input 
+          id="tokenKey" 
+          type="text" 
+          placeholder="Enter API token here..." 
+          value="demo-secret-key-2026"
+        />
+      </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="main-grid">
+      
+      <!-- Left Column: Submit Post Form -->
+      <aside class="glass-panel">
+        <h3 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0.5rem;">
+          Publish New Post via API
+        </h3>
+        
+        <form id="postForm">
+          <div class="form-group">
+            <label for="author">Author Name</label>
+            <input id="author" type="text" placeholder="Your name" required />
+          </div>
+
+          <div class="form-group">
+            <label for="title">Post Title</label>
+            <input id="title" type="text" placeholder="Catchy post title" required />
+          </div>
+
+          <div class="form-group">
+            <label for="content">Content Details</label>
+            <textarea id="content" rows="4" placeholder="What would you like to share?" required></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="category">Category</label>
+              <select id="category">
+                <option value="General">General</option>
+                <option value="Tech">Tech</option>
+                <option value="Idea">Idea</option>
+                <option value="Life">Life</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="cover">Cover URL (Optional)</label>
+              <input id="cover" type="url" placeholder="https://..." />
+            </div>
+          </div>
+
+          <button type="submit" class="btn" style="width: 100%; margin-top: 0.5rem;">
+            Submit Post
+          </button>
+        </form>
+      </aside>
+
+      <!-- Right Column: API Feed View -->
+      <section class="glass-panel" style="min-height: 500px;">
+        <div class="feed-header">
+          <h2>Active Feed Items</h2>
+          <button id="fetchBtn" class="btn btn-secondary">
+            Fetch Latest Feed
+          </button>
+        </div>
+
+        <!-- Feed List Output -->
+        <div id="feedOutput">
+          <div class="status-msg">Click "Fetch Latest Feed" to query the FastAPI backend server.</div>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <!-- Toast notification box -->
+  <div id="toast" class="toast">Post submitted successfully!</div>
+
+  <script>
+    const API_BASE = "http://localhost:8000/v1/api";
+
+    const fetchBtn = document.getElementById("fetchBtn");
+    const feedOutput = document.getElementById("feedOutput");
+    const postForm = document.getElementById("postForm");
+    const tokenKey = document.getElementById("tokenKey");
+    const toast = document.getElementById("toast");
+
+    // Show Notification Toast Helper
+    function showToast(message, isError = false) {
+      toast.textContent = message;
+      toast.style.borderColor = isError ? "var(--error)" : "var(--accent)";
+      toast.style.display = "block";
+      setTimeout(() => {
+        toast.style.display = "none";
+      }, 3500);
+    }
+
+    // Fetch and Render Posts from GET endpoint
+    async function fetchFeed() {
+      feedOutput.innerHTML = '<div class="status-msg">Connecting to server and fetching 10,000 feed posts...</div>';
+      try {
+        const res = await fetch(`${API_BASE}/get_posts`);
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        
+        if (data.length === 0) {
+          feedOutput.innerHTML = '<div class="status-msg">No posts found in database.</div>';
+          return;
+        }
+
+        // Render top 12 items only for preview convenience
+        const previewList = data.slice(0, 12);
+        
+        let html = `<div style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                      Loaded <strong>${data.length}</strong> total posts. Showing latest 12 entries:
+                    </div>`;
+        html += '<div class="feed-grid">';
+        
+        previewList.forEach(post => {
+          const cover = post.medium_cover_image || post.large_cover_image || post.small_cover_image || "https://picsum.photos/seed/nopic/600/350";
+          const screenshotsHtml = post.screenshots && post.screenshots.length > 0 
+            ? `<div class="screenshot-gallery">
+                 ${post.screenshots.map(src => `<img src="${src}" onclick="window.open('${src}', '_blank')" />`).join('')}
+               </div>`
+            : '';
+
+          html += `
+            <div class="post-card">
+              <img src="${cover}" class="post-cover" alt="cover" />
+              <div class="post-body">
+                <span class="category-badge" style="align-self: flex-start; margin-bottom: 0.4rem;">${post.category}</span>
+                <h4 class="post-title">${post.title}</h4>
+                <p class="post-desc">${post.content}</p>
+                ${screenshotsHtml}
+                <div class="post-meta">
+                  <span>By ${post.author}</span>
+                  <span class="likes-badge">
+                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    <strong>${post.likes || 0}</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        
+        html += '</div>';
+        feedOutput.innerHTML = html;
+      } catch (err) {
+        feedOutput.innerHTML = `
+          <div class="status-msg" style="color: var(--error);">
+            Error loading feed: ${err.message}<br>
+            <span style="font-size: 0.8rem; display: block; margin-top: 0.5rem;">
+              Make sure your FastAPI server is running on port 8000 (python main.py)
+            </span>
+          </div>`;
+      }
+    }
+
+    // Submit Post Form via POST endpoint (authenticated)
+    async function submitPost(e) {
+      e.preventDefault();
+      const token = tokenKey.value.trim();
+      
+      const payload = {
+        title: document.getElementById("title").value.trim(),
+        author: document.getElementById("author").value.trim(),
+        content: document.getElementById("content").value.trim(),
+        category: document.getElementById("category").value,
+        medium_cover_image: document.getElementById("cover").value.trim() || null,
+        large_cover_image: document.getElementById("cover").value.trim() || null,
+        small_cover_image: document.getElementById("cover").value.trim() || null
+      };
+
+      try {
+        const res = await fetch(`${API_BASE}/create_posts`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.status === 401) {
+          throw new Error("Unauthorized! Your API Security Token is invalid or expired.");
+        }
+        
+        if (!res.ok) {
+          throw new Error(`Failed to create post. Server returned ${res.status}`);
+        }
+
+        showToast("Post published successfully through API!");
+        postForm.reset();
+        fetchFeed(); // Refresh the list
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    // Event Listeners
+    fetchBtn.addEventListener("click", fetchFeed);
+    postForm.addEventListener("submit", submitPost);
+
+    // Initial Fetch on Load
+    fetchFeed();
+  </script>
+</body>
+</html>
