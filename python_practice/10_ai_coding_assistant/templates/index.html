@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coding Assistant Dashboard</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Premium Stylesheet -->
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 1. Sidebar Panel -->
+        <aside class="sidebar">
+            <div class="brand">
+                <i class="fa-solid fa-graduation-cap logo-icon"></i>
+                <h2>PyCurriculum</h2>
+            </div>
+            
+            <nav class="curriculum-nav">
+                <h3>Lessons Completed</h3>
+                <ul>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 01. Python Basics</li>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 02. File Handling</li>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 03. JSON CRUD</li>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 04. MySQL Database</li>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 05. FastAPI Basics</li>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 06. REST APIs</li>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 07. Authentication</li>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 08. Project Micro-services</li>
+                    <li class="completed"><i class="fa-regular fa-circle-check"></i> 09. Pytest Testing</li>
+                    <li class="active"><i class="fa-solid fa-play"></i> 10. AI Coding App</li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- 2. Main Chat Panel -->
+        <main class="chat-panel">
+            <header class="chat-header">
+                <div class="header-info">
+                    <h1>AI Practice Lab Assistant</h1>
+                    <span id="connection-badge" class="badge local-mode">
+                        <i class="fa-solid fa-server"></i> Local Simulation Mode
+                    </span>
+                </div>
+                <div class="user-profile">
+                    <i class="fa-solid fa-user-ninja"></i>
+                    <span>Student Coder</span>
+                </div>
+            </header>
+
+            <!-- Chat Message Window -->
+            <div class="chat-history" id="chat-history">
+                <!-- Welcome Message -->
+                <div class="message assistant-message">
+                    <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                    <div class="message-content">
+                        <p>Hi there! I am your interactive **Python & FastAPI Coding Assistant**.</p>
+                        <p>Ask me any questions about the curriculum modules! For example, ask: *"How do I connect to MySQL?"* or *"Give me a FastAPI endpoint template!"*</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typing Indicator (Hidden by default) -->
+            <div class="typing-indicator" id="typing-indicator" style="display: none;">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+
+            <!-- Input Panel -->
+            <footer class="chat-footer">
+                <form id="chat-form" class="chat-form">
+                    <input type="text" id="chat-input" placeholder="Ask a Python or FastAPI question..." autocomplete="off" required>
+                    <button type="submit" id="send-btn">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Frontend Controller -->
+    <script src="/static/app.js"></script>
+</body>
+</html>
