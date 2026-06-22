@@ -21,6 +21,8 @@ Follow these steps to run the application locally on your computer:
 4. Start the FastAPI server:
    ```bash
    python main.py
+
+   python -m uvicorn main:app --reload
    ```
    *The backend server will run at: **`http://127.0.0.1:8000`***
 
