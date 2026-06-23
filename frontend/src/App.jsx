@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import PostForm from './components/PostForm'
 import CommunityFeed from './components/CommunityFeed'
+import ApiKeyModal from './components/ApiKeyModal'
+import ImageLightbox from './components/ImageLightbox'
 
 export default function App() {
   const [posts, setPosts] = useState([])
@@ -20,6 +22,12 @@ export default function App() {
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
+
+  // Pagination & Filtering state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [selectedFilter, setSelectedFilter] = useState('All')
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState('home')
@@ -30,6 +38,18 @@ export default function App() {
   })
   const [isTokenValid, setIsTokenValid] = useState(true)
   const [authError, setAuthError] = useState(null)
+
+  // API Key Modal State
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false)
+
+  // Authenticate and save new API key
+  const handleAuthenticateKey = (newKey) => {
+    setToken(newKey)
+    localStorage.setItem('api_token', newKey)
+    setIsTokenValid(true)
+    setAuthError(null)
+    showToast('API Key Activated & Authenticated!')
+  }
 
   // Code Snippet state toggle
   const [activeSnippet, setActiveSnippet] = useState('get')
@@ -44,17 +64,77 @@ export default function App() {
     }
   })
 
-  // Fetch posts from API (public endpoint)
+  // Bookmarked Posts local state tracker
+  const [bookmarkedPosts, setBookmarkedPosts] = useState(() => {
+    try {
+      const stored = localStorage.getItem('bookmarked_posts')
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
+
+  // Image Lightbox Viewer state
+  const [lightboxImages, setLightboxImages] = useState([])
+  const [lightboxIndex, setLightboxIndex] = useState(0)
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false)
+
+  const handleOpenLightbox = (images, startIndex) => {
+    setLightboxImages(images)
+    setLightboxIndex(startIndex)
+    setIsLightboxOpen(true)
+  }
+
+  const handleLightboxPrev = () => {
+    setLightboxIndex((prev) => (prev === 0 ? lightboxImages.length - 1 : prev - 1))
+  }
+
+  const handleLightboxNext = () => {
+    setLightboxIndex((prev) => (prev === lightboxImages.length - 1 ? 0 : prev + 1))
+  }
+
+  // Handle post bookmark toggle locally
+  const handleBookmarkPost = (postId) => {
+    setBookmarkedPosts((prev) => {
+      const next = new Set(prev)
+      if (next.has(postId)) {
+        next.delete(postId)
+        showToast('Removed from Bookmarks!')
+      } else {
+        next.add(postId)
+        showToast('Saved to Bookmarks!')
+      }
+      return next
+    })
+  }
+
+  // Global Statistics State
+  const [stats, setStats] = useState({ total_posts: 0, total_likes: 0, unique_authors: 0 })
+  const [categoryStats, setCategoryStats] = useState([])
+
+  // Fetch posts from API (paginated, with search & filtering)
   const fetchPosts = async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/v1/api/get_posts')
+      const params = new URLSearchParams({
+        page: currentPage,
+        limit: 12
+      })
+      if (selectedFilter !== 'All' && selectedFilter !== 'Liked' && selectedFilter !== 'Bookmarked') {
+        params.append('category', selectedFilter)
+      }
+      if (searchQuery.trim()) {
+        params.append('search', searchQuery.trim())
+      }
+      
+      const response = await fetch(`/v1/api/get_posts?${params.toString()}`)
       if (!response.ok) {
         throw new Error('Failed to fetch posts. Please try again.')
       }
       const data = await response.json()
-      setPosts(data)
+      setPosts(data.posts)
+      setTotalPages(Math.ceil(data.total / data.limit) || 1)
     } catch (err) {
       setError(err.message || 'Something went wrong.')
     } finally {
@@ -62,15 +142,43 @@ export default function App() {
     }
   }
 
-  // Fetch on mount
+  // Fetch stats from API
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('/v1/api/stats/summary')
+      if (res.ok) {
+        const data = await res.json()
+        setStats(data)
+      }
+      const catRes = await fetch('/v1/api/stats/categories')
+      if (catRes.ok) {
+        const catData = await catRes.json()
+        setCategoryStats(catData)
+      }
+    } catch (err) {
+      console.error("Error loading stats:", err)
+    }
+  }
+
+  // Fetch posts when pagination/filters change
   useEffect(() => {
     fetchPosts()
+  }, [currentPage, selectedFilter, searchQuery])
+
+  // Fetch stats on mount
+  useEffect(() => {
+    fetchStats()
   }, [])
 
   // Sync liked posts to local storage
   useEffect(() => {
     localStorage.setItem('liked_posts', JSON.stringify(Array.from(likedPosts)))
   }, [likedPosts])
+
+  // Sync bookmarked posts to local storage
+  useEffect(() => {
+    localStorage.setItem('bookmarked_posts', JSON.stringify(Array.from(bookmarkedPosts)))
+  }, [bookmarkedPosts])
 
   // Generate new random API token from backend
   const handleGenerateToken = async () => {
@@ -135,6 +243,7 @@ export default function App() {
       setPosts((prevPosts) => [savedPost, ...prevPosts])
       setIsTokenValid(true)
       showToast('Post published successfully!')
+      fetchStats()
       
       if (onSuccess) onSuccess()
 
@@ -194,6 +303,7 @@ export default function App() {
       })
 
       setIsTokenValid(true)
+      fetchStats()
     } catch (err) {
       if (err.message.includes('Unauthorized') || err.message.includes('token')) {
         setAuthError(err.message)
@@ -203,10 +313,45 @@ export default function App() {
     }
   }
 
+  // Handle post deletion (authenticated)
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm("Are you sure you want to delete this post?")) return
+    setAuthError(null)
+
+    try {
+      const response = await fetch(`/v1/api/posts/delete/${postId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.status === 401) {
+        setIsTokenValid(false)
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Unauthorized: Invalid token.')
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to delete post.')
+      }
+
+      showToast('Post successfully deleted!')
+      fetchPosts()
+      fetchStats()
+    } catch (err) {
+      if (err.message.includes('Unauthorized') || err.message.includes('token')) {
+        setAuthError(err.message)
+      } else {
+        showToast(err.message || 'Could not delete post.')
+      }
+    }
+  }
+
   // Dashboard Stats Calculations
-  const totalPosts = posts.length
-  const totalLikes = posts.reduce((sum, p) => sum + (p.likes || 0), 0)
-  const uniqueAuthors = new Set(posts.map((p) => p.author.trim().toLowerCase())).size
+  const totalPosts = stats.total_posts
+  const totalLikes = stats.total_likes
+  const uniqueAuthors = stats.unique_authors
 
   // Javascript code snippets for developer integration
   const jsGetSnippet = `// Fetch community feed posts from your website
@@ -343,7 +488,7 @@ fetch('http://localhost:8000/v1/api/create_posts', {
                     placeholder="Enter API token key"
                   />
                   <button 
-                    onClick={handleGenerateToken}
+                    onClick={() => setIsApiKeyModalOpen(true)}
                     className="btn btn-primary"
                     style={{ width: 'auto', padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                   >
@@ -374,7 +519,7 @@ fetch('http://localhost:8000/v1/api/create_posts', {
                     </span>
                   </div>
                   <button 
-                    onClick={handleGenerateToken}
+                    onClick={() => setIsApiKeyModalOpen(true)}
                     className="btn btn-primary"
                     style={{ width: 'auto', padding: '0.4rem 0.85rem', fontSize: '0.75rem' }}
                   >
@@ -453,13 +598,43 @@ fetch('http://localhost:8000/v1/api/create_posts', {
           <CommunityFeed 
             posts={posts}
             onLike={handleLikePost}
+            onDelete={handleDeletePost}
             likedPosts={likedPosts}
+            bookmarkedPosts={bookmarkedPosts}
+            onBookmark={handleBookmarkPost}
+            onOpenLightbox={handleOpenLightbox}
+            token={token}
             loading={loading}
             error={error}
             onRefresh={fetchPosts}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            totalPages={totalPages}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            selectedFilter={selectedFilter}
+            setSelectedFilter={setSelectedFilter}
           />
         )}
       </main>
+
+      {/* API Key Generation Modal popup */}
+      <ApiKeyModal 
+        isOpen={isApiKeyModalOpen} 
+        onClose={() => setIsApiKeyModalOpen(false)} 
+        onAuthenticate={handleAuthenticateKey} 
+        token={token} 
+      />
+
+      {/* Interactive Image Lightbox Modal */}
+      <ImageLightbox
+        images={lightboxImages}
+        currentIndex={lightboxIndex}
+        isOpen={isLightboxOpen}
+        onClose={() => setIsLightboxOpen(false)}
+        onPrev={handleLightboxPrev}
+        onNext={handleLightboxNext}
+      />
 
       {/* Toast Alert Notification */}
       {toastMessage && (

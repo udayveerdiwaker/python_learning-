@@ -7,10 +7,18 @@ from datetime import datetime, timedelta
 import secrets
 import random
 import uvicorn
-import json
 import os
+import json
 
-app = FastAPI(title="Photo Feed API with JSON Persistence")
+# SQLAlchemy imports
+# pyrefly: ignore [missing-import]
+from sqlalchemy import create_engine, Column, Integer, String, Text, JSON, DateTime, func, text
+# pyrefly: ignore [missing-import]
+from sqlalchemy.ext.declarative import declarative_base     
+# pyrefly: ignore [missing-import]
+from sqlalchemy.orm import sessionmaker, Session
+
+app = FastAPI(title="Photo Feed API with MySQL Persistence")
 
 # Enable CORS for external websites to fetch data
 app.add_middleware(
@@ -27,10 +35,64 @@ security = HTTPBearer()
 # In-memory store for valid session tokens
 valid_tokens = {"demo-secret-key-2026"}
 
-# Database JSON file location
-DB_FILE = "posts.json"
+# Database URL for local MySQL instance
+DATABASE_URL = os.getenv("DATABASE_URL", "mysql+mysqlconnector://root:@127.0.0.1:3306/python_post_db")
 
-# Pydantic schemas with rich image fields
+# Attempt to check/create the database if it doesn't exist
+try:
+    base_url = DATABASE_URL.rsplit("/", 1)[0] + "/"
+    temp_engine = create_engine(base_url)
+    with temp_engine.connect() as conn:
+        conn.execute(text("CREATE DATABASE IF NOT EXISTS python_post_db"))
+        conn.commit()
+    temp_engine.dispose()
+    print("Database python_post_db verified/created.")
+except Exception as e:
+    print(f"Warning: Could not verify/create database: {e}")
+
+# Create the SQLAlchemy Engine
+engine = create_engine(
+    DATABASE_URL,
+    pool_recycle=3600,
+    pool_pre_ping=True
+)
+
+# SessionLocal class is the factory that makes new database session objects
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base class for ORM models
+Base = declarative_base()
+
+# SQLAlchemy Model for Posts
+class DBPost(Base):
+    __tablename__ = "posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(150), nullable=False)
+    content = Column(Text, nullable=False)
+    author = Column(String(50), nullable=False)
+    category = Column(String(20), default="General")
+    likes = Column(Integer, default=0)
+    small_cover_image = Column(String(255), default="")
+    medium_cover_image = Column(String(255), default="")
+    large_cover_image = Column(String(255), default="")
+    screenshots = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# SQLAlchemy Model for Comments
+class DBComment(Base):
+    __tablename__ = "comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, nullable=False, index=True)
+    author = Column(String(50), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Pydantic schemas
 class PostCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=150)
     content: str = Field(..., min_length=1)
@@ -52,7 +114,25 @@ class Post(BaseModel):
     medium_cover_image: str
     large_cover_image: str
     screenshots: List[str]
-    created_at: str
+    created_at: datetime
+    comment_count: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+class CommentCreate(BaseModel):
+    author: str = Field(..., min_length=1, max_length=50)
+    content: str = Field(..., min_length=1)
+
+class Comment(BaseModel):
+    id: int
+    post_id: int
+    author: str
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 # Mock Generator Helper (generating 10,000 rich photo feed items)
 def generate_mock_posts(count: int = 10000) -> List[dict]:
@@ -109,44 +189,75 @@ def generate_mock_posts(count: int = 10000) -> List[dict]:
         
     return generated
 
-# Database File Operations
-def save_posts_to_file(posts_list: List[dict]):
+# Seed the database if empty
+def seed_database():
+    db = SessionLocal()
     try:
-        with open(DB_FILE, "w", encoding="utf-8") as f:
-            json.dump(posts_list, f, indent=4, ensure_ascii=False)
+        if db.query(DBPost).count() == 0:
+            posts_data = []
+            # Check if posts.json exists and load from it
+            db_file = os.path.join(os.path.dirname(__file__), "posts.json")
+            if os.path.exists(db_file):
+                print(f"Loading seed data from {db_file}...")
+                try:
+                    with open(db_file, "r", encoding="utf-8") as f:
+                        posts_data = json.load(f)
+                except Exception as e:
+                    print(f"Error reading posts.json: {e}")
+            
+            # Fallback to generating mock posts if posts.json is missing/empty
+            if not posts_data:
+                print("posts.json not found or empty. Generating mock posts...")
+                posts_data = generate_mock_posts(10000)
+            
+            print(f"Seeding {len(posts_data)} posts into MySQL...")
+            db_posts = []
+            for p in posts_data:
+                created_at_val = p.get("created_at")
+                if isinstance(created_at_val, str):
+                    try:
+                        # Clean Z suffix or microsecond differences
+                        cleaned_time = created_at_val.replace("Z", "")
+                        created_dt = datetime.fromisoformat(cleaned_time)
+                    except ValueError:
+                        created_dt = datetime.utcnow()
+                else:
+                    created_dt = datetime.utcnow()
+
+                db_posts.append(DBPost(
+                    id=p["id"],
+                    title=p.get("title", ""),
+                    content=p.get("content", ""),
+                    author=p.get("author", ""),
+                    category=p.get("category", "General"),
+                    likes=p.get("likes", 0),
+                    small_cover_image=p.get("small_cover_image", ""),
+                    medium_cover_image=p.get("medium_cover_image", ""),
+                    large_cover_image=p.get("large_cover_image", ""),
+                    screenshots=p.get("screenshots", []),
+                    created_at=created_dt
+                ))
+            
+            # Bulk save in chunks of 2000 to prevent buffer overflow/issues on some setups
+            chunk_size = 2000
+            for i in range(0, len(db_posts), chunk_size):
+                db.bulk_save_objects(db_posts[i:i+chunk_size])
+                db.commit()
+            print("Database seeding completed.")
     except Exception as e:
-        print(f"Error saving to file database: {e}")
+        print(f"Error seeding database: {e}")
+    finally:
+        db.close()
 
-def load_posts_from_file() -> List[dict]:
-    force_reseed = False
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r", encoding="utf-8") as f:
-                temp_posts = json.load(f)
-                # Force reseed if the old movie attributes exist or count is < 10,000
-                if len(temp_posts) < 10000 or "mpa_rating" in temp_posts[0] or "genres" in temp_posts[0]:
-                    print("Existing database contains movie schemas or is undersized. Forcing clean reseed...")
-                    force_reseed = True
-        except Exception:
-            force_reseed = True
+seed_database()
 
-    if not os.path.exists(DB_FILE) or force_reseed:
-        print("JSON Database file not found or outdated. Seeding 10,000 photo posts...")
-        seeded = generate_mock_posts(10000)
-        save_posts_to_file(seeded)
-        return seeded
+# Dependency to get db session
+def get_db():
+    db = SessionLocal()
     try:
-        with open(DB_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading JSON Database file: {e}. Re-seeding...")
-        seeded = generate_mock_posts(10000)
-        save_posts_to_file(seeded)
-        return seeded
-
-# Load active database state
-posts = load_posts_from_file()
-next_post_id = max([p["id"] for p in posts]) + 1 if posts else 1
+        yield db
+    finally:
+        db.close()
 
 # Dependency to verify token
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -166,52 +277,187 @@ def generate_token():
     return {"token": token}
 
 # Post endpoints
-@app.get("/v1/api/get_posts", response_model=List[Post])
-def get_posts():
-    return sorted(posts, key=lambda x: x["created_at"], reverse=True)
+@app.get("/v1/api/get_posts")
+def get_posts(
+    page: int = 1,
+    limit: int = 12,
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(DBPost)
+    
+    if category and category != "All" and category != "Liked":
+        query = query.filter(DBPost.category == category)
+        
+    if search:
+        search_query = f"%{search}%"
+        query = query.filter(
+            (DBPost.title.like(search_query)) |
+            (DBPost.content.like(search_query)) |
+            (DBPost.author.like(search_query))
+        )
+        
+    total = query.count()
+    
+    posts = query.order_by(DBPost.created_at.desc())\
+                 .offset((page - 1) * limit)\
+                 .limit(limit)\
+                 .all()
+                 
+    # Build response with comment counts
+    posts_list = []
+    for p in posts:
+        comment_count = db.query(DBComment).filter(DBComment.post_id == p.id).count()
+        posts_list.append({
+            "id": p.id,
+            "title": p.title,
+            "content": p.content,
+            "author": p.author,
+            "category": p.category,
+            "likes": p.likes,
+            "small_cover_image": p.small_cover_image,
+            "medium_cover_image": p.medium_cover_image,
+            "large_cover_image": p.large_cover_image,
+            "screenshots": p.screenshots or [],
+            "created_at": p.created_at,
+            "comment_count": comment_count
+        })
+        
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "posts": posts_list
+    }
+
+@app.get("/v1/api/posts/search")
+def search_posts(query: str, db: Session = Depends(get_db)):
+    search_query = f"%{query}%"
+    posts = db.query(DBPost).filter(
+        (DBPost.title.like(search_query)) |
+        (DBPost.content.like(search_query)) |
+        (DBPost.author.like(search_query))
+    ).order_by(DBPost.created_at.desc()).limit(50).all()
+    
+    posts_list = []
+    for p in posts:
+        comment_count = db.query(DBComment).filter(DBComment.post_id == p.id).count()
+        posts_list.append({
+            "id": p.id,
+            "title": p.title,
+            "content": p.content,
+            "author": p.author,
+            "category": p.category,
+            "likes": p.likes,
+            "small_cover_image": p.small_cover_image,
+            "medium_cover_image": p.medium_cover_image,
+            "large_cover_image": p.large_cover_image,
+            "screenshots": p.screenshots or [],
+            "created_at": p.created_at,
+            "comment_count": comment_count
+        })
+    return posts_list
 
 @app.post("/v1/api/create_posts", response_model=Post, status_code=201)
-def create_post(post_in: PostCreate, token: str = Depends(verify_token)):
-    global next_post_id
+def create_post(post_in: PostCreate, token: str = Depends(verify_token), db: Session = Depends(get_db)):
+    max_id = db.query(func.max(DBPost.id)).scalar() or 0
+    seed_id = max_id + 1
+
+    sm = post_in.small_cover_image or f"https://picsum.photos/seed/photo-sm-{seed_id}/200/300"
+    med = post_in.medium_cover_image or f"https://picsum.photos/seed/photo-med-{seed_id}/600/350"
+    large = post_in.large_cover_image or f"https://picsum.photos/seed/photo-large-{seed_id}/1000/600"
+    scr = post_in.screenshots or [
+        f"https://picsum.photos/seed/photo-scr1-{seed_id}/500/300",
+        f"https://picsum.photos/seed/photo-scr2-{seed_id}/500/300",
+        f"https://picsum.photos/seed/photo-scr3-{seed_id}/500/300"
+    ]
+
+    new_post = DBPost(
+        title=post_in.title.strip(),
+        content=post_in.content.strip(),
+        author=post_in.author.strip(),
+        category=post_in.category.strip(),
+        likes=0,
+        small_cover_image=sm,
+        medium_cover_image=med,
+        large_cover_image=large,
+        screenshots=scr,
+        created_at=datetime.utcnow()
+    )
     
-    # Generate default cover image fields if not specified
-    sm = post_in.small_cover_image or f"https://picsum.photos/seed/photo-sm-{next_post_id}/200/300"
-    med = post_in.medium_cover_image or f"https://picsum.photos/seed/photo-med-{next_post_id}/600/350"
-    large = post_in.large_cover_image or f"https://picsum.photos/seed/photo-large-{next_post_id}/1000/600"
-    
-    new_post = {
-        "id": next_post_id,
-        "title": post_in.title.strip(),
-        "content": post_in.content.strip(),
-        "author": post_in.author.strip(),
-        "category": post_in.category.strip(),
-        "likes": 0,
-        "small_cover_image": sm,
-        "medium_cover_image": med,
-        "large_cover_image": large,
-        "screenshots": post_in.screenshots or [
-            f"https://picsum.photos/seed/photo-scr1-{next_post_id}/500/300",
-            f"https://picsum.photos/seed/photo-scr2-{next_post_id}/500/300",
-            f"https://picsum.photos/seed/photo-scr3-{next_post_id}/500/300"
-        ],
-        "created_at": datetime.now().isoformat()
-    }
-    posts.append(new_post)
-    next_post_id += 1
-    
-    # Persist state
-    save_posts_to_file(posts)
-    
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
     return new_post
 
 @app.post("/v1/api/like_post/{post_id}", response_model=Post)
-def like_post(post_id: int, token: str = Depends(verify_token)):
-    for post in posts:
-        if post["id"] == post_id:
-            post["likes"] += 1
-            save_posts_to_file(posts)
-            return post
-    raise HTTPException(status_code=404, detail="Post not found")
+def like_post(post_id: int, token: str = Depends(verify_token), db: Session = Depends(get_db)):
+    db_post = db.query(DBPost).filter(DBPost.id == post_id).first()
+    if not db_post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    db_post.likes += 1
+    db.commit()
+    db.refresh(db_post)
+    return db_post
+
+@app.delete("/v1/api/posts/delete/{post_id}")
+def delete_post(post_id: int, token: str = Depends(verify_token), db: Session = Depends(get_db)):
+    db_post = db.query(DBPost).filter(DBPost.id == post_id).first()
+    if not db_post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    # Also delete comments for this post
+    db.query(DBComment).filter(DBComment.post_id == post_id).delete()
+    
+    db.delete(db_post)
+    db.commit()
+    return {"detail": "Post and associated comments successfully deleted."}
+
+# Comment endpoints
+@app.get("/v1/api/posts/{post_id}/comments", response_model=List[Comment])
+def get_comments(post_id: int, db: Session = Depends(get_db)):
+    return db.query(DBComment).filter(DBComment.post_id == post_id).order_by(DBComment.created_at.asc()).all()
+
+@app.post("/v1/api/posts/{post_id}/comments", response_model=Comment, status_code=201)
+def create_comment(
+    post_id: int, 
+    comment_in: CommentCreate, 
+    token: str = Depends(verify_token), 
+    db: Session = Depends(get_db)
+):
+    db_post = db.query(DBPost).filter(DBPost.id == post_id).first()
+    if not db_post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    new_comment = DBComment(
+        post_id=post_id,
+        author=comment_in.author.strip(),
+        content=comment_in.content.strip(),
+        created_at=datetime.utcnow()
+    )
+    db.add(new_comment)
+    db.commit()
+    db.refresh(new_comment)
+    return new_comment
+
+# Stats endpoints
+@app.get("/v1/api/stats/categories")
+def get_category_stats(db: Session = Depends(get_db)):
+    results = db.query(DBPost.category, func.count(DBPost.id)).group_by(DBPost.category).all()
+    return [{"category": r[0] or "General", "count": r[1]} for r in results]
+
+@app.get("/v1/api/stats/summary")
+def get_summary_stats(db: Session = Depends(get_db)):
+    total_posts = db.query(DBPost).count()
+    total_likes = db.query(func.sum(DBPost.likes)).scalar() or 0
+    unique_authors = db.query(DBPost.author).distinct().count()
+    return {
+        "total_posts": total_posts,
+        "total_likes": total_likes,
+        "unique_authors": unique_authors
+    }
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
