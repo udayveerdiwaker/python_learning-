@@ -80,3 +80,25 @@ Authentication relies on the `verify_token` dependency injected into sensitive r
 | `/v1/api/posts/{id}/comments` | `POST` | protected | Appends a comment to the post. |
 | `/v1/api/stats/summary` | `GET` | Public | Queries database counts for posts, total likes, and unique author names. |
 | `/v1/api/stats/categories` | `GET` | Public | Groups and aggregates posts to return counts for each active category. |
+
+
+
+-- 1. Create the database
+CREATE DATABASE IF NOT EXISTS python_practice_db;
+USE python_practice_db;
+
+-- 2. Create the posts table
+CREATE TABLE IF NOT EXISTS posts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(150) NOT NULL,
+    content TEXT NOT NULL,
+    author VARCHAR(50) NOT NULL,
+    category VARCHAR(20) DEFAULT 'General',
+    likes INT DEFAULT 0,
+    small_cover_image VARCHAR(255) DEFAULT '',
+    medium_cover_image VARCHAR(255) DEFAULT '',
+    large_cover_image VARCHAR(255) DEFAULT '',
+    screenshots JSON NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+

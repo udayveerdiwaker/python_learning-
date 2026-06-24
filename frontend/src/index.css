@@ -737,11 +737,12 @@ header p {
   max-width: 450px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 .nav-tab {
   flex: 1;
-  padding: 0.65rem 1.5rem;
+  padding: 0.65rem 1.5rem;  
   border-radius: 1.5rem;
   border: 1px solid transparent;
   background: transparent;
@@ -1105,127 +1106,5 @@ header p {
   align-items: center;
   justify-content: center;
   margin: 0 auto;
-}
-
-/* Full-screen Lightbox overlay */
-.lightbox-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(5, 3, 10, 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3000;
-  user-select: none;
-  animation: fadeIn 0.2s ease forwards;
-}
-
-.lightbox-content {
-  position: relative;
-  max-width: 85%;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.lightbox-img {
-  max-width: 100%;
-  max-height: 75vh;
-  object-fit: contain;
-  border-radius: 0.75rem;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.05);
-}
-
-.lightbox-caption {
-  margin-top: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.lightbox-download-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: var(--accent-purple);
-  text-decoration: none;
-  font-weight: 500;
-  transition: opacity 0.2s ease;
-}
-
-.lightbox-download-link:hover {
-  opacity: 0.8;
-}
-
-/* Lightbox Action and Navigation Buttons */
-.lightbox-btn {
-  position: absolute;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #fff;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  z-index: 3100;
-}
-
-.lightbox-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
-  transform: scale(1.05);
-}
-
-.lightbox-btn:active {
-  transform: scale(0.95);
-}
-
-.lightbox-close {
-  top: 2rem;
-  right: 2rem;
-  width: 48px;
-  height: 48px;
-}
-
-.lightbox-nav-left {
-  left: 2rem;
-  width: 56px;
-  height: 56px;
-}
-
-.lightbox-nav-right {
-  right: 2rem;
-  width: 56px;
-  height: 56px;
-}
-
-@media (max-width: 768px) {
-  .lightbox-close {
-    top: 1rem;
-    right: 1rem;
-  }
-  
-  .lightbox-nav-left {
-    left: 0.75rem;
-    width: 44px;
-    height: 44px;
-  }
-  
-  .lightbox-nav-right {
-    right: 0.75rem;
-    width: 44px;
-    height: 44px;
-  }
 }
 
