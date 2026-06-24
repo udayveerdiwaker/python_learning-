@@ -1,52 +1,39 @@
-import React, { useState, useEffect } from 'react'
-import { Search, MessageSquare, RefreshCw, FileText, ChevronLeft, ChevronRight, AlertCircle, Heart } from 'lucide-react'
+import React, { useEffect } from 'react'
+import { Search, MessageSquare, RefreshCw, FileText, ChevronLeft, ChevronRight, AlertCircle, Heart, Bookmark } from 'lucide-react'
 import PostCard from './PostCard'
 
-export default function CommunityFeed({ posts, onLike, likedPosts, loading, error, onRefresh }) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedFilter, setSelectedFilter] = useState('All')
+export default function CommunityFeed({ 
+  posts, 
+  onLike, 
+  onDelete, 
+  likedPosts, 
+  bookmarkedPosts,
+  onBookmark,
+  onOpenLightbox,
+  token,
+  loading, 
+  error, 
+  onRefresh,
+  currentPage,
+  setCurrentPage,
+  totalPages,
+  searchQuery,
+  setSearchQuery,
+  selectedFilter,
+  setSelectedFilter
+}) {
   
-  // Numbered Pagination State
-  const [currentPage, setCurrentPage] = useState(1)
-  const postsPerPage = 12
-
-  // Reset pagination when search or filters change
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchQuery, selectedFilter])
-
   // Scroll to top of feed when page changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [currentPage])
 
-  // Filter posts
-  const filteredPosts = posts.filter((post) => {
-    const matchesSearch = 
-      post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.author.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    let matchesFilter = false
-    if (selectedFilter === 'All') {
-      matchesFilter = true
-    } else if (selectedFilter === 'Liked') {
-      matchesFilter = likedPosts.has(post.id)
-    } else {
-      matchesFilter = post.category === selectedFilter
-    }
-    
-    return matchesSearch && matchesFilter
-  })
-
-  // Calculate total pages
-  const totalPages = Math.ceil(filteredPosts.length / postsPerPage)
-
-  // Paginated posts subset
-  const paginatedPosts = filteredPosts.slice(
-    (currentPage - 1) * postsPerPage,
-    currentPage * postsPerPage
-  )
+  // Local client-side filtering for user Bookmarks and Likes
+  const displayedPosts = selectedFilter === 'Liked'
+    ? posts.filter((post) => likedPosts.has(post.id))
+    : selectedFilter === 'Bookmarked'
+      ? posts.filter((post) => bookmarkedPosts.has(post.id))
+      : posts
 
   // Generate page numbers range helper with ellipsis
   const getPageNumbers = () => {
@@ -86,7 +73,7 @@ export default function CommunityFeed({ posts, onLike, likedPosts, loading, erro
     return pages
   }
 
-  const CATEGORIES = ['All', 'General', 'Tech', 'Idea', 'Life', 'Liked']
+  const CATEGORIES = ['All', 'General', 'Tech', 'Idea', 'Life', 'Liked', 'Bookmarked']
 
   return (
     <div className="community-feed-view">
@@ -98,9 +85,12 @@ export default function CommunityFeed({ posts, onLike, likedPosts, loading, erro
           <input
             type="text"
             className="form-input search-input"
-            placeholder="Search 1,000+ posts by title, author, or content..."
+            placeholder="Search 10,000+ posts by title, author, or content..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setCurrentPage(1) // reset page on search
+            }}
           />
         </div>
 
@@ -110,10 +100,13 @@ export default function CommunityFeed({ posts, onLike, likedPosts, loading, erro
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
-              onClick={() => setSelectedFilter(cat)}
+              onClick={() => {
+                setSelectedFilter(cat)
+                setCurrentPage(1) // reset page on filter change
+              }}
               className={`filter-pill ${selectedFilter === cat ? 'active' : ''}`}
               data-category={cat}
-              style={cat === 'Liked' ? { display: 'inline-flex', alignItems: 'center', gap: '0.35rem' } : {}}
+              style={(cat === 'Liked' || cat === 'Bookmarked') ? { display: 'inline-flex', alignItems: 'center', gap: '0.35rem' } : {}}
             >
               {cat === 'Liked' && (
                 <Heart 
@@ -122,7 +115,16 @@ export default function CommunityFeed({ posts, onLike, likedPosts, loading, erro
                   color={selectedFilter === 'Liked' ? '#ef4444' : 'currentColor'} 
                 />
               )}
-              <span>{cat === 'Liked' ? 'My Likes' : cat}</span>
+              {cat === 'Bookmarked' && (
+                <Bookmark 
+                  size={12} 
+                  fill={selectedFilter === 'Bookmarked' ? '#f59e0b' : 'none'} 
+                  color={selectedFilter === 'Bookmarked' ? '#f59e0b' : 'currentColor'} 
+                />
+              )}
+              <span>
+                {cat === 'Liked' ? 'My Likes' : cat === 'Bookmarked' ? 'Bookmarks' : cat}
+              </span>
             </button>
           ))}
         </div>
@@ -156,12 +158,12 @@ export default function CommunityFeed({ posts, onLike, likedPosts, loading, erro
       )}
 
       {/* Feed list */}
-      {loading && posts.length === 0 ? (
+      {loading ? (
         <div className="loading-container">
           <div className="spinner"></div>
-          <p>Loading feed posts...</p>
+          <p>Loading database feed...</p>
         </div>
-      ) : filteredPosts.length === 0 ? (
+      ) : displayedPosts.length === 0 ? (
         <div className="empty-state">
           <FileText size={48} />
           <h3>No posts matched</h3>
@@ -170,18 +172,23 @@ export default function CommunityFeed({ posts, onLike, likedPosts, loading, erro
       ) : (
         <>
           <div className="feed-container">
-            {paginatedPosts.map((post) => (
+            {displayedPosts.map((post) => (
               <PostCard 
                 key={post.id} 
                 post={post} 
                 onLike={onLike}
+                onDelete={onDelete}
                 isLiked={likedPosts.has(post.id)}
+                isBookmarked={bookmarkedPosts.has(post.id)}
+                onBookmark={onBookmark}
+                onOpenLightbox={onOpenLightbox}
+                token={token}
               />
             ))}
           </div>
 
           {/* Numbered Pagination controls */}
-          {totalPages > 1 && (
+          {selectedFilter !== 'Liked' && selectedFilter !== 'Bookmarked' && totalPages > 1 && (
             <div className="pagination-bar">
               <button 
                 className="pagination-btn"
